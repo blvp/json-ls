@@ -1,0 +1,6 @@
+{
+  "$schema": "./simple-schema.json",
+  "name": "hello",
+  "count": 42,
+  "enabled": true
+}

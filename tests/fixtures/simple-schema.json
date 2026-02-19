@@ -1,0 +1,21 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Simple Test Schema",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "The name of the item"
+    },
+    "count": {
+      "type": "integer",
+      "description": "How many items",
+      "default": 0
+    },
+    "enabled": {
+      "type": "boolean",
+      "description": "Whether this is enabled"
+    }
+  },
+  "required": ["name"]
+}
