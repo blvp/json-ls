@@ -3,6 +3,12 @@
 A JSON Language Server that detects `"$schema"` in JSON files, fetches the referenced JSON Schema,
 and provides diagnostics, hover, and completion via the LSP protocol.
 
+## Features
+
+- **Diagnostics** — JSON Schema validation, 300 ms debounced
+- **Hover** — description, type, default, enum values, examples
+- **Completion** — property names + enum / type-based value snippets
+
 ## Installation
 
 ```sh
@@ -16,16 +22,46 @@ make build
 make install   # installs to ~/.local/bin/json-ls
 ```
 
-## Usage
+## Neovim Setup
 
-Intended to be used with the [json-ls.nvim](https://github.com/blvp/json-ls.nvim) Neovim plugin,
-or any LSP client that supports stdio JSON-RPC transport.
+Requires Neovim ≥ 0.11. Add to your config:
 
-## Features
+```lua
+vim.lsp.config["json-ls"] = {
+  cmd = { "json-ls" },
+  filetypes = { "json", "jsonc" },
+  root_markers = { ".git", "package.json", ".editorconfig" },
+  single_file_support = true,
+  init_options = {
+    schema_ttl_secs       = 28800,  -- schema cache TTL (seconds)
+    schema_cache_capacity = 128,    -- max schemas in memory
+  },
+}
+vim.lsp.enable("json-ls")
+```
 
-- **Diagnostics** — JSON Schema validation, 300 ms debounced
-- **Hover** — description, type, default, enum values, examples
-- **Completion** — property names + enum / type-based value snippets
+### With nvim-cmp / blink.cmp
+
+Pass extended capabilities before calling `vim.lsp.enable`:
+
+```lua
+vim.lsp.config["json-ls"] = {
+  cmd = { "json-ls" },
+  filetypes = { "json", "jsonc" },
+  root_markers = { ".git", "package.json", ".editorconfig" },
+  single_file_support = true,
+  capabilities = require("cmp_nvim_lsp").default_capabilities(),
+  init_options = {
+    schema_ttl_secs       = 28800,
+    schema_cache_capacity = 128,
+  },
+}
+vim.lsp.enable("json-ls")
+```
+
+### Other LSP clients
+
+`json-ls` speaks standard LSP over stdio. Point any LSP client at the `json-ls` binary.
 
 ## Configuration (`initializationOptions`)
 
