@@ -7,6 +7,19 @@ Rust LSP server binary only. No Lua plugin — users wire it up via Neovim's nat
 Core features working: diagnostics, hover, completion.
 See TODO markers in source for planned follow-on work.
 
+### Distribution To-Do (see `docs/plans/distribution-roadmap.md` for full detail)
+
+| # | Task | Blocks |
+|---|------|--------|
+| 1 | Add `--version` flag to `main.rs` | Homebrew test, Mason validation |
+| 2 | `CHANGELOG.md` — start before tagging | Release hygiene |
+| 3 | GitHub Actions: CI workflow (fmt + lint + test on PR) | — |
+| 4 | Tag `v0.1.0`, create first GitHub Release (manual) | Everything below |
+| 5 | GitHub Actions: release workflow — cross-compile + upload binaries | Homebrew, Mason |
+| 6 | Create `blvp/homebrew-tap` repo + `Formula/json-ls.rb` | `brew install` |
+| 7 | Submit PR to `mason-org/mason-registry` | `:MasonInstall json-ls` |
+| 8 | (later) Submit to `homebrew/homebrew-core` | `brew install json-ls` without tap |
+
 ---
 
 ## Project Overview
