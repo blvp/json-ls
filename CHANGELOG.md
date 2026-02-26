@@ -8,6 +8,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-02-26
+
+### Fixed
+
+- `--version` / `-V` flag hung on macOS due to Tokio runtime teardown; now uses `std::process::exit(0)` to exit immediately.
+
 ## [0.1.0] - 2026-02-26
 
 ### Added

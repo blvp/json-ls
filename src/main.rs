@@ -16,7 +16,7 @@ use backend::Backend;
 async fn main() {
     if std::env::args().any(|a| a == "--version" || a == "-V") {
         println!("{}", env!("CARGO_PKG_VERSION"));
-        return;
+        std::process::exit(0);
     }
 
     fmt()

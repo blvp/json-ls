@@ -880,7 +880,7 @@ dependencies = [
 
 [[package]]
 name = "json-ls"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "dashmap 6.1.0",
