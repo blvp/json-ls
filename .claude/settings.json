@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "file=$(python3 -c \"import sys,json; print(json.load(sys.stdin).get('file_path',''))\" <<< \"$CLAUDE_TOOL_INPUT\" 2>/dev/null); [[ \"$file\" == *.rs ]] && cargo fmt 2>/dev/null; true"
+          }
+        ]
+      }
+    ]
+  }
+}

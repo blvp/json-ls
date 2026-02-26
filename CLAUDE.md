@@ -2,22 +2,23 @@
 
 ## Project Status
 
-**v0.1.0 — pre-release.**
+**v0.1.0 — pre-release, ready to tag.**
 Rust LSP server binary only. No Lua plugin — users wire it up via Neovim's native `vim.lsp.config`.
 Core features working: diagnostics, hover, completion.
 See TODO markers in source for planned follow-on work.
 
 ### Distribution To-Do (see `docs/plans/distribution-roadmap.md` for full detail)
 
-| # | Task | Blocks |
+| # | Task | Status |
 |---|------|--------|
-| 1 | Add `--version` flag to `main.rs` | Homebrew test, Mason validation |
-| 2 | `CHANGELOG.md` — start before tagging | Release hygiene |
-| 3 | GitHub Actions: CI workflow (fmt + lint + test on PR) | — |
-| 4 | Tag `v0.1.0`, create first GitHub Release (manual) | Everything below |
-| 5 | GitHub Actions: release workflow — cross-compile + upload binaries | Homebrew, Mason |
-| 6 | Create `blvp/homebrew-tap` repo + `Formula/json-ls.rb` | `brew install` |
-| 7 | Submit PR to `mason-org/mason-registry` | `:MasonInstall json-ls` |
+| 1 | `--version` / `-V` flag | ✅ done |
+| 2 | `CHANGELOG.md` | ✅ done |
+| 3 | GitHub Actions CI workflow (fmt + clippy + test, ubuntu + macos) | ✅ done |
+| 4 | GitHub Actions release workflow (5-target cross-compile + GitHub Release) | ✅ done |
+| 5 | Tag `v0.1.0` and push — triggers release workflow | ⬜ next |
+| 6 | Create `blvp/homebrew-tap` repo + `Formula/json-ls.rb` | ⬜ |
+| 7 | Submit PR to `mason-org/mason-registry` | ⬜ |
+| 8 | (later) Submit to `homebrew/homebrew-core` | ⬜ |
 | 8 | (later) Submit to `homebrew/homebrew-core` | `brew install json-ls` without tap |
 
 ---

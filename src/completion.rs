@@ -30,7 +30,11 @@ pub async fn handle_completion(
             // Cursor is inside an existing quoted key (e.g. between autopairs "").
             // `path` now includes the key itself; drop the last segment to get the parent.
             // insert_text must NOT include a leading '"' — the opening quote is already there.
-            let parent_path = if path.is_empty() { &[][..] } else { &path[..path.len() - 1] };
+            let parent_path = if path.is_empty() {
+                &[][..]
+            } else {
+                &path[..path.len() - 1]
+            };
             let parent_node = if parent_path.is_empty() {
                 SchemaNode::new(&schema_value, &schema_value)
             } else {
