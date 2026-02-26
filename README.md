@@ -11,11 +11,34 @@ and provides diagnostics, hover, and completion via the LSP protocol.
 
 ## Installation
 
+### Homebrew (macOS / Linux)
+
+```sh
+brew tap blvp/tap
+brew install json-ls
+```
+
+### Pre-built binaries
+
+Download from [GitHub Releases](https://github.com/blvp/json-ls/releases/latest):
+
+| Platform | Asset |
+|----------|-------|
+| macOS ARM | `json-ls-*-aarch64-macos.tar.gz` |
+| macOS Intel | `json-ls-*-x86_64-macos.tar.gz` |
+| Linux ARM | `json-ls-*-aarch64-linux.tar.gz` |
+| Linux x86_64 | `json-ls-*-x86_64-linux.tar.gz` |
+| Windows x86_64 | `json-ls-*-x86_64-windows.zip` |
+
+Extract and place the `json-ls` binary somewhere on your `$PATH`.
+
+### Cargo
+
 ```sh
 cargo install --git https://github.com/blvp/json-ls
 ```
 
-Or build from source:
+### Build from source
 
 ```sh
 make build
