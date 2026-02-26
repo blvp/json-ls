@@ -8,7 +8,7 @@ pub enum PathSegment {
 /// The semantic context of the cursor position within a JSON document.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PositionContext {
-    /// Cursor is on/in a key string.  `path` is the path UP TO the parent object.
+    /// Cursor is on/in a key string.  `path` is the full path TO this key (same semantics as `Value`).
     Key { path: Vec<PathSegment> },
     /// Cursor is just at the start of a key (e.g., at `"`).
     KeyStart { path: Vec<PathSegment> },
@@ -143,9 +143,12 @@ fn scan_object(
             let key_start = *pos;
             let key = scan_string(bytes, pos);
 
-            // Check if target is inside the key string
+            // Check if target is inside the key string.
+            // Include the key itself in the path so hover navigates to this field's schema.
             if target > key_start && target <= *pos {
-                *result = PositionContext::Key { path: path.clone() };
+                let mut key_path = path.clone();
+                key_path.push(PathSegment::Key(key.clone()));
+                *result = PositionContext::Key { path: key_path };
                 return;
             }
 
@@ -385,6 +388,31 @@ mod tests {
                 PositionContext::Key { .. } | PositionContext::KeyStart { .. }
             ),
             "Expected Key/KeyStart, got {result:?}"
+        );
+    }
+
+    #[test]
+    fn test_cursor_in_key_includes_key_in_path() {
+        // Line 2: `  "name": "hello",`  cursor at col 4 → inside "name" key
+        // Key { path } must include "name" so hover navigates to the field's schema.
+        let result = ctx(DOC, 2, 4);
+        assert!(
+            matches!(result, PositionContext::Key { ref path } if *path == vec![PathSegment::Key("name".into())]),
+            "Expected Key with path [name], got {result:?}"
+        );
+    }
+
+    #[test]
+    fn test_cursor_in_nested_key_includes_full_path() {
+        // Line 6: `    "inner": true`  cursor at col 6 → inside "inner" key
+        // Key { path } must be [nested, inner] — the full path to the field.
+        let result = ctx(DOC, 6, 6);
+        assert!(
+            matches!(result, PositionContext::Key { ref path } if *path == vec![
+                PathSegment::Key("nested".into()),
+                PathSegment::Key("inner".into())
+            ]),
+            "Expected Key with path [nested, inner], got {result:?}"
         );
     }
 

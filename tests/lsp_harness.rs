@@ -382,6 +382,137 @@ async fn test_hover_key() {
 }
 
 #[tokio::test]
+async fn test_hover_on_key_string_returns_field_docs() {
+    // Regression test: hovering on the key string itself (not the value) must return docs
+    // for that field, not for the parent object.
+    let client = LspClient::spawn().await;
+    client.initialize().await;
+
+    let schema_url = schema_file_url();
+    // Line 0: {
+    // Line 1:   "$schema": "...",
+    // Line 2:   "name": "hello",
+    // Line 3:   "count": 42
+    // Line 4: }
+    // Hover at line 2, character 4 — inside the key string "name"
+    // Line 2: `  "name": "hello",`
+    //          0123456789
+    let text = format!(
+        "{{\n  \"$schema\": \"{schema_url}\",\n  \"name\": \"hello\",\n  \"count\": 42\n}}"
+    );
+    client
+        .send_notification(
+            "textDocument/didOpen",
+            Some(json!({
+                "textDocument": {
+                    "uri": "file:///tmp/hover_key.json",
+                    "languageId": "json",
+                    "version": 1,
+                    "text": text,
+                }
+            })),
+        )
+        .await;
+
+    client
+        .wait_for_notification("textDocument/publishDiagnostics")
+        .await;
+
+    let resp = client
+        .send_request(
+            "textDocument/hover",
+            Some(json!({
+                "textDocument": { "uri": "file:///tmp/hover_key.json" },
+                "position": { "line": 2, "character": 4 }
+            })),
+        )
+        .await;
+
+    let result = &resp["result"];
+    assert!(
+        !result.is_null(),
+        "Expected hover result when cursor is on a key, got null. resp: {resp}"
+    );
+    let contents = result["contents"]["value"].as_str().unwrap_or("");
+    assert!(
+        contents.contains("name") || contents.contains("The name") || contents.contains("string"),
+        "Expected hover to show field-level docs (name/description/type), got: {contents:?}"
+    );
+    // Must NOT show root-level title (that would mean we navigated to parent)
+    assert!(
+        !contents.contains("Simple Test Schema"),
+        "Hover returned root schema docs instead of field docs: {contents:?}"
+    );
+
+    client.shutdown().await;
+}
+
+#[tokio::test]
+async fn test_hover_on_nested_key_returns_field_docs() {
+    // Regression test: hovering on A.b.c key must return docs for c, not for b.
+    let client = LspClient::spawn().await;
+    client.initialize().await;
+
+    let schema_url = schema_file_url();
+    // Document with a nested object:
+    // Line 0: {
+    // Line 1:   "$schema": "...",
+    // Line 2:   "meta": {
+    // Line 3:     "author": "Alice"
+    // Line 4:   }
+    // Line 5: }
+    // Hover at line 3, character 6 — inside the key string "author" (nested inside "meta")
+    let text = format!(
+        "{{\n  \"$schema\": \"{schema_url}\",\n  \"meta\": {{\n    \"author\": \"Alice\"\n  }}\n}}"
+    );
+    client
+        .send_notification(
+            "textDocument/didOpen",
+            Some(json!({
+                "textDocument": {
+                    "uri": "file:///tmp/hover_nested_key.json",
+                    "languageId": "json",
+                    "version": 1,
+                    "text": text,
+                }
+            })),
+        )
+        .await;
+
+    client
+        .wait_for_notification("textDocument/publishDiagnostics")
+        .await;
+
+    let resp = client
+        .send_request(
+            "textDocument/hover",
+            Some(json!({
+                "textDocument": { "uri": "file:///tmp/hover_nested_key.json" },
+                "position": { "line": 3, "character": 6 }
+            })),
+        )
+        .await;
+
+    let result = &resp["result"];
+    assert!(
+        !result.is_null(),
+        "Expected hover result for nested key 'author', got null. resp: {resp}"
+    );
+    let contents = result["contents"]["value"].as_str().unwrap_or("");
+    assert!(
+        contents.contains("Author") || contents.contains("author") || contents.contains("string"),
+        "Expected hover to show 'author' field docs, got: {contents:?}"
+    );
+    // Must NOT show 'meta' object docs (that would mean we navigated to parent)
+    assert!(
+        !contents.contains("Metadata container"),
+        "Hover returned parent 'meta' docs instead of 'author' field docs: {contents:?}"
+    );
+
+    client.shutdown().await;
+}
+
+#[tokio::test]
 async fn test_completion_property_names() {
     let client = LspClient::spawn().await;
     client.initialize().await;
