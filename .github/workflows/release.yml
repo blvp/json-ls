@@ -1,0 +1,147 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v[0-9]+.*"
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  # Verify the tag version matches Cargo.toml before doing any cross-compile work
+  verify-version:
+    name: Verify version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.check.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check tag matches Cargo.toml
+        id: check
+        run: |
+          TAG="${GITHUB_REF_NAME}"           # e.g. v0.1.0
+          CARGO_VER="v$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[0].version')"
+          echo "Tag: $TAG  Cargo: $CARGO_VER"
+          if [ "$TAG" != "$CARGO_VER" ]; then
+            echo "ERROR: tag $TAG does not match Cargo.toml version $CARGO_VER"
+            exit 1
+          fi
+          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+
+  build:
+    name: Build ${{ matrix.target }}
+    needs: verify-version
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            runner: ubuntu-latest
+            asset_name: json-ls-${{ needs.verify-version.outputs.version }}-x86_64-linux
+            archive: tar.gz
+
+          - target: aarch64-unknown-linux-gnu
+            runner: ubuntu-24.04-arm
+            asset_name: json-ls-${{ needs.verify-version.outputs.version }}-aarch64-linux
+            archive: tar.gz
+
+          - target: x86_64-apple-darwin
+            runner: macos-13
+            asset_name: json-ls-${{ needs.verify-version.outputs.version }}-x86_64-macos
+            archive: tar.gz
+
+          - target: aarch64-apple-darwin
+            runner: macos-latest
+            asset_name: json-ls-${{ needs.verify-version.outputs.version }}-aarch64-macos
+            archive: tar.gz
+
+          - target: x86_64-pc-windows-msvc
+            runner: windows-latest
+            asset_name: json-ls-${{ needs.verify-version.outputs.version }}-x86_64-windows
+            archive: zip
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-${{ matrix.target }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-${{ matrix.target }}-cargo-
+
+      - name: Build release binary
+        run: cargo build --release --target ${{ matrix.target }}
+
+      - name: Package (Unix)
+        if: matrix.archive == 'tar.gz'
+        run: |
+          BIN="target/${{ matrix.target }}/release/json-ls"
+          ARCHIVE="${{ matrix.asset_name }}.tar.gz"
+          tar -czf "$ARCHIVE" -C "$(dirname $BIN)" "$(basename $BIN)"
+          sha256sum "$ARCHIVE" >> checksums.txt
+          echo "ASSET=$ARCHIVE" >> $GITHUB_ENV
+
+      - name: Package (Windows)
+        if: matrix.archive == 'zip'
+        shell: pwsh
+        run: |
+          $BIN = "target\${{ matrix.target }}\release\json-ls.exe"
+          $ARCHIVE = "${{ matrix.asset_name }}.zip"
+          Compress-Archive -Path $BIN -DestinationPath $ARCHIVE
+          $hash = (Get-FileHash $ARCHIVE -Algorithm SHA256).Hash.ToLower()
+          "$hash  $ARCHIVE" | Out-File -Append checksums.txt
+          echo "ASSET=$ARCHIVE" | Out-File -Append $env:GITHUB_ENV
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.asset_name }}
+          path: |
+            ${{ matrix.asset_name }}.*
+            checksums.txt
+
+  release:
+    name: Create GitHub Release
+    needs: [verify-version, build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Merge checksums
+        run: |
+          cat artifacts/checksums.txt | sort -u > checksums.txt
+          echo "--- Checksums ---"
+          cat checksums.txt
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          draft: false
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          generate_release_notes: true
+          files: |
+            artifacts/*.tar.gz
+            artifacts/*.zip
+            checksums.txt

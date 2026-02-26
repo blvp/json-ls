@@ -14,6 +14,11 @@ use backend::Backend;
 
 #[tokio::main]
 async fn main() {
+    if std::env::args().any(|a| a == "--version" || a == "-V") {
+        println!("{}", env!("CARGO_PKG_VERSION"));
+        return;
+    }
+
     fmt()
         .with_env_filter(EnvFilter::from_default_env())
         .with_writer(std::io::stderr)
