@@ -28,15 +28,17 @@ pub async fn handle_completion(
     let items = match &context {
         PositionContext::Key { path } => {
             // Cursor is inside an existing quoted key (e.g. between autopairs "").
+            // `path` now includes the key itself; drop the last segment to get the parent.
             // insert_text must NOT include a leading '"' — the opening quote is already there.
-            let parent_node = if path.is_empty() {
+            let parent_path = if path.is_empty() { &[][..] } else { &path[..path.len() - 1] };
+            let parent_node = if parent_path.is_empty() {
                 SchemaNode::new(&schema_value, &schema_value)
             } else {
-                root_node.navigate(path)?
+                root_node.navigate(parent_path)?
             };
             let names = parent_node.property_names();
             debug!(
-                "Completion Key: found {} property names at path {path:?}",
+                "Completion Key: found {} property names at parent {parent_path:?}",
                 names.len()
             );
             property_completions_from_names(names, &parent_node, false)
