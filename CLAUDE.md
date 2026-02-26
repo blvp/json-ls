@@ -15,8 +15,8 @@ See TODO markers in source for planned follow-on work.
 | 2 | `CHANGELOG.md` | ✅ done |
 | 3 | GitHub Actions CI workflow (fmt + clippy + test, ubuntu + macos) | ✅ done |
 | 4 | GitHub Actions release workflow (5-target cross-compile + GitHub Release) | ✅ done |
-| 5 | Tag `v0.1.0` and push — triggers release workflow | ⬜ next |
-| 6 | Create `blvp/homebrew-tap` repo + `Formula/json-ls.rb` | ⬜ |
+| 5 | Tag `v0.1.0` and push — triggers release workflow | ✅ done |
+| 6 | Create `blvp/homebrew-tap` repo + `Formula/json-ls.rb` | ✅ done |
 | 7 | Submit PR to `mason-org/mason-registry` | ⬜ |
 | 8 | (later) Submit to `homebrew/homebrew-core` | ⬜ |
 | 8 | (later) Submit to `homebrew/homebrew-core` | `brew install json-ls` without tap |
