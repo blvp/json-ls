@@ -77,6 +77,183 @@ fn lsp_position_to_byte_offset(text: &str, line: u32, character: u32) -> Option<
     Some(line_start + line_text.len())
 }
 
+/// Collect the keys of the JSON object at `path`, in the order they appear in the document.
+///
+/// The key currently under the cursor is skipped — while typing, that key is not an
+/// existing sibling but the one being completed.  Returns an empty vec when `path` does
+/// not resolve to an object (malformed or still-being-typed input included).
+///
+/// This is a standalone forward scan rather than an extension of `position_to_context`:
+/// keys *after* the cursor must be collected too, and the context scanner returns as soon
+/// as it has classified the cursor.
+pub fn object_keys_at(text: &str, path: &[PathSegment], line: u32, character: u32) -> Vec<String> {
+    let cursor = lsp_position_to_byte_offset(text, line, character);
+    let bytes = text.as_bytes();
+    let mut pos = 0;
+
+    skip_whitespace(bytes, &mut pos);
+    if pos >= bytes.len() || bytes[pos] != b'{' {
+        return Vec::new();
+    }
+
+    if !descend_to(bytes, &mut pos, path) {
+        return Vec::new();
+    }
+
+    collect_keys(bytes, &mut pos, cursor)
+}
+
+/// Walk `pos` (parked on a `{` or `[`) down to the container named by `path`.
+/// Returns false when the path does not resolve.
+fn descend_to(bytes: &[u8], pos: &mut usize, path: &[PathSegment]) -> bool {
+    let Some((segment, rest)) = path.split_first() else {
+        return true;
+    };
+
+    match segment {
+        PathSegment::Key(want) => {
+            if *pos >= bytes.len() || bytes[*pos] != b'{' {
+                return false;
+            }
+            *pos += 1; // consume '{'
+            loop {
+                skip_whitespace(bytes, pos);
+                if *pos >= bytes.len() || bytes[*pos] == b'}' {
+                    return false;
+                }
+                if bytes[*pos] == b',' {
+                    *pos += 1;
+                    continue;
+                }
+                if bytes[*pos] != b'"' {
+                    // Malformed — give up rather than guess.
+                    return false;
+                }
+                let key = scan_string(bytes, pos);
+                skip_whitespace(bytes, pos);
+                if *pos < bytes.len() && bytes[*pos] == b':' {
+                    *pos += 1;
+                }
+                skip_whitespace(bytes, pos);
+                if *pos >= bytes.len() {
+                    return false;
+                }
+                if key == *want {
+                    return descend_to(bytes, pos, rest);
+                }
+                skip_value(bytes, pos);
+            }
+        }
+        PathSegment::Index(want) => {
+            if *pos >= bytes.len() || bytes[*pos] != b'[' {
+                return false;
+            }
+            *pos += 1; // consume '['
+            let mut index = 0usize;
+            loop {
+                skip_whitespace(bytes, pos);
+                if *pos >= bytes.len() || bytes[*pos] == b']' {
+                    return false;
+                }
+                if bytes[*pos] == b',' {
+                    *pos += 1;
+                    index += 1;
+                    continue;
+                }
+                if index == *want {
+                    return descend_to(bytes, pos, rest);
+                }
+                skip_value(bytes, pos);
+            }
+        }
+    }
+}
+
+/// List the keys of the object starting at `pos`, skipping the one spanning `cursor`.
+fn collect_keys(bytes: &[u8], pos: &mut usize, cursor: Option<usize>) -> Vec<String> {
+    let mut keys = Vec::new();
+
+    if *pos >= bytes.len() || bytes[*pos] != b'{' {
+        return keys;
+    }
+    *pos += 1; // consume '{'
+
+    loop {
+        skip_whitespace(bytes, pos);
+        if *pos >= bytes.len() {
+            break;
+        }
+        match bytes[*pos] {
+            b'}' => break,
+            b',' => {
+                *pos += 1;
+                continue;
+            }
+            b'"' => {}
+            _ => {
+                // Malformed token between entries — skip it and keep scanning.
+                *pos += 1;
+                continue;
+            }
+        }
+
+        let key_start = *pos;
+        let key = scan_string(bytes, pos);
+        let key_end = *pos;
+
+        // The key being typed is not an existing sibling.
+        let under_cursor = cursor.is_some_and(|c| c >= key_start && c <= key_end);
+        if !under_cursor {
+            keys.push(key);
+        }
+
+        skip_whitespace(bytes, pos);
+        if *pos < bytes.len() && bytes[*pos] == b':' {
+            *pos += 1;
+            skip_whitespace(bytes, pos);
+            skip_value(bytes, pos);
+        }
+    }
+
+    keys
+}
+
+/// Advance `pos` past one complete JSON value (object, array, string, or literal).
+fn skip_value(bytes: &[u8], pos: &mut usize) {
+    if *pos >= bytes.len() {
+        return;
+    }
+    match bytes[*pos] {
+        b'{' | b'[' => {
+            let open = bytes[*pos];
+            let close = if open == b'{' { b'}' } else { b']' };
+            let mut depth = 0usize;
+            while *pos < bytes.len() {
+                match bytes[*pos] {
+                    b'"' => {
+                        scan_string(bytes, pos);
+                        continue;
+                    }
+                    c if c == open => depth += 1,
+                    c if c == close => {
+                        depth -= 1;
+                        if depth == 0 {
+                            *pos += 1;
+                            return;
+                        }
+                    }
+                    _ => {}
+                }
+                *pos += 1;
+            }
+        }
+        b'"' => {
+            scan_string(bytes, pos);
+        }
+        _ => skip_literal(bytes, pos),
+    }
+}
+
 /// Scan `text` and determine the JSON context at the given byte target offset.
 pub fn position_to_context(text: &str, line: u32, character: u32) -> PositionContext {
     let target = match lsp_position_to_byte_offset(text, line, character) {
@@ -514,5 +691,84 @@ mod tests {
         let result = ctx(text, 0, 1);
         // Inside empty object — Unknown or ValueStart is fine
         let _ = result; // just shouldn't panic
+    }
+
+    // ── object_keys_at ──────────────────────────────────────────
+
+    /// Line 3 holds a bare `""` — the key being typed.
+    const TYPING: &str = r#"{
+  "$schema": "s",
+  "name": "hello",
+  "",
+  "count": 42,
+  "meta": { "author": "me" }
+}"#;
+
+    #[test]
+    fn test_object_keys_in_document_order() {
+        // Cursor between the quotes of the empty key on line 3.
+        let keys = object_keys_at(TYPING, &[], 3, 3);
+        assert_eq!(
+            keys,
+            vec!["$schema", "name", "count", "meta"],
+            "Keys must come back in document order, not sorted"
+        );
+    }
+
+    #[test]
+    fn test_object_keys_excludes_key_under_cursor() {
+        // Cursor inside the existing "name" key (line 2, col 4) — it is being edited,
+        // so it must not count as an existing sibling.
+        let keys = object_keys_at(TYPING, &[], 2, 4);
+        assert!(
+            !keys.contains(&"name".to_owned()),
+            "Key under the cursor must be excluded, got: {keys:?}"
+        );
+        assert!(
+            keys.contains(&"count".to_owned()),
+            "Other keys must still be collected, got: {keys:?}"
+        );
+    }
+
+    #[test]
+    fn test_object_keys_nested_path() {
+        // Line 5 is `  "meta": { "author": "me" }` — col 11 is the space after `{`,
+        // i.e. inside the nested object but not on its key.
+        let keys = object_keys_at(TYPING, &[PathSegment::Key("meta".into())], 5, 11);
+        assert_eq!(keys, vec!["author"]);
+    }
+
+    #[test]
+    fn test_object_keys_through_array_index() {
+        let text = r#"{"list": [{"a": 1, "b": 2}, {"c": 3}]}"#;
+        let path = vec![PathSegment::Key("list".into()), PathSegment::Index(0)];
+        assert_eq!(object_keys_at(text, &path, 0, 0), vec!["a", "b"]);
+
+        let path = vec![PathSegment::Key("list".into()), PathSegment::Index(1)];
+        assert_eq!(object_keys_at(text, &path, 0, 0), vec!["c"]);
+    }
+
+    #[test]
+    fn test_object_keys_skips_nested_objects() {
+        // Keys of an inner object must not leak into the outer object's key list.
+        let text = r#"{"a": {"inner": 1}, "b": [1, 2], "c": 3}"#;
+        assert_eq!(object_keys_at(text, &[], 0, 0), vec!["a", "b", "c"]);
+    }
+
+    #[test]
+    fn test_object_keys_unresolvable_path_is_empty() {
+        assert!(object_keys_at(TYPING, &[PathSegment::Key("nope".into())], 0, 0).is_empty());
+        // `name` is a string, not an object.
+        assert!(object_keys_at(TYPING, &[PathSegment::Key("name".into())], 0, 0).is_empty());
+        // Not an object at all.
+        assert!(object_keys_at("[1, 2]", &[], 0, 0).is_empty());
+    }
+
+    #[test]
+    fn test_object_keys_survives_malformed_input() {
+        // Unterminated document mid-typing must not hang or panic.
+        let text = "{\n  \"a\": 1,\n  \"b\": {\n    \"c\":\n";
+        let keys = object_keys_at(text, &[], 3, 8);
+        assert!(keys.contains(&"a".to_owned()), "got: {keys:?}");
     }
 }

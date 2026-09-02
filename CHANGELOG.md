@@ -8,6 +8,13 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- Property completions are now ordered by what the object at the cursor is still missing:
+  properties absent from the object come first (alphabetically), followed by properties
+  already present, in the order they appear in the document. Ordering is carried in
+  `sortText`, so clients honour it.
+
 ## [0.1.1] - 2026-02-26
 
 ### Fixed

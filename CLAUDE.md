@@ -30,7 +30,9 @@ referenced JSON Schema, and provides:
 
 - **Diagnostics** — jsonschema validation, 300 ms debounced
 - **Hover** — description, type, default, enum values, examples
-- **Completion** — property names + enum / type-based value snippets
+- **Completion** — property names + enum / type-based value snippets.
+  Property names are ranked by absence: keys the object does not have yet come first,
+  keys it already has follow in document order (carried in `sortText`).
 
 See `README.md` for user-facing documentation.
 
@@ -45,7 +47,8 @@ src/
   backend.rs             LanguageServer trait — dispatches all LSP methods
   config.rs              ServerConfig parsed from initializationOptions
   document.rs            DocumentStore: DashMap<Url, DocumentState> + ropey rope
-  position.rs  ★         Hand-rolled byte scanner → PositionContext + JSON path
+  position.rs  ★         Hand-rolled byte scanner → PositionContext + JSON path;
+                         object_keys_at() lists an object's keys in document order
   hover.rs               hover() — delegates to schema/navigator + position
   completion.rs          completion() — property names + enum/type snippets
   diagnostics.rs         jsonschema validation → LSP Diagnostic list (debounced)

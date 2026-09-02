@@ -7,7 +7,9 @@ and provides diagnostics, hover, and completion via the LSP protocol.
 
 - **Diagnostics** — JSON Schema validation, 300 ms debounced
 - **Hover** — description, type, default, enum values, examples
-- **Completion** — property names + enum / type-based value snippets
+- **Completion** — property names + enum / type-based value snippets.
+  Suggestions lead with the properties the object is still missing; properties it already
+  has are listed after, in the order they appear in the file.
 
 ## Installation
 

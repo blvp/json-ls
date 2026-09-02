@@ -1,5 +1,5 @@
 use crate::document::DocumentStore;
-use crate::position::{position_to_context, PathSegment, PositionContext};
+use crate::position::{object_keys_at, position_to_context, PathSegment, PositionContext};
 use crate::schema::{SchemaCache, SchemaNode};
 use std::sync::Arc;
 use tower_lsp::lsp_types::{
@@ -40,10 +40,13 @@ pub async fn handle_completion(
             } else {
                 root_node.navigate(parent_path)?
             };
-            let names = parent_node.property_names();
+            let existing = object_keys_at(&text, parent_path, pos.line, pos.character);
+            let names = order_by_absence(parent_node.property_names(), &existing);
             debug!(
-                "Completion Key: found {} property names at parent {parent_path:?}",
-                names.len()
+                "Completion Key: found {} property names at parent {parent_path:?}, \
+                 {} already present in the document",
+                names.len(),
+                existing.len()
             );
             property_completions_from_names(names, &parent_node, false)
         }
@@ -55,10 +58,13 @@ pub async fn handle_completion(
             } else {
                 root_node.navigate(path)?
             };
-            let names = parent_node.property_names();
+            let existing = object_keys_at(&text, path, pos.line, pos.character);
+            let names = order_by_absence(parent_node.property_names(), &existing);
             debug!(
-                "Completion KeyStart: found {} property names at path {path:?}",
-                names.len()
+                "Completion KeyStart: found {} property names at path {path:?}, \
+                 {} already present in the document",
+                names.len(),
+                existing.len()
             );
             property_completions_from_names(names, &parent_node, true)
         }
@@ -82,6 +88,23 @@ pub async fn handle_completion(
     Some(CompletionResponse::Array(items))
 }
 
+/// Order property suggestions by what the object at the cursor is still missing.
+///
+/// Properties absent from the object come first — those are the ones worth offering —
+/// keeping the schema's own (alphabetical) order among them.  Properties already present
+/// follow, in the order they appear in the document, so re-typing an existing key lands
+/// where the reader expects it.
+fn order_by_absence(names: Vec<String>, existing: &[String]) -> Vec<String> {
+    let (mut present, missing): (Vec<String>, Vec<String>) =
+        names.into_iter().partition(|n| existing.contains(n));
+
+    present.sort_by_key(|n| existing.iter().position(|k| k == n).unwrap_or(usize::MAX));
+
+    let mut ordered = missing;
+    ordered.extend(present);
+    ordered
+}
+
 fn property_completions_from_names(
     names: Vec<String>,
     node: &SchemaNode,
@@ -89,7 +112,8 @@ fn property_completions_from_names(
 ) -> Vec<CompletionItem> {
     names
         .into_iter()
-        .map(|name| {
+        .enumerate()
+        .map(|(rank, name)| {
             let info = node
                 .navigate(&[PathSegment::Key(name.clone())])
                 .map(|n| n.hover_info());
@@ -120,6 +144,9 @@ fn property_completions_from_names(
                 documentation,
                 insert_text: Some(insert_text),
                 insert_text_format: Some(InsertTextFormat::PLAIN_TEXT),
+                // Clients sort by sortText, not by array order — the ranking from
+                // `order_by_absence` only survives if it is spelled out here.
+                sort_text: Some(format!("{rank:05}")),
                 ..Default::default()
             }
         })
@@ -159,5 +186,67 @@ fn make_snippet(label: &str, insert_text: &str) -> CompletionItem {
         insert_text: Some(insert_text.to_owned()),
         insert_text_format: Some(InsertTextFormat::SNIPPET),
         ..Default::default()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn names(list: &[&str]) -> Vec<String> {
+        list.iter().map(|s| (*s).to_owned()).collect()
+    }
+
+    #[test]
+    fn test_missing_properties_come_first() {
+        // Schema offers these (alphabetical, as `property_names` returns them);
+        // the document already has "count" and "name".
+        let ordered = order_by_absence(
+            names(&["count", "enabled", "meta", "name"]),
+            &names(&["name", "count"]),
+        );
+        assert_eq!(ordered, names(&["enabled", "meta", "name", "count"]));
+    }
+
+    #[test]
+    fn test_present_properties_keep_document_order() {
+        // Document order is the reverse of alphabetical — the tail must follow the
+        // document, not the schema.
+        let ordered = order_by_absence(
+            names(&["a", "b", "c"]),
+            &names(&["c", "b", "unrelated", "a"]),
+        );
+        assert_eq!(ordered, names(&["c", "b", "a"]));
+    }
+
+    #[test]
+    fn test_empty_object_keeps_schema_order() {
+        let ordered = order_by_absence(names(&["a", "b", "c"]), &[]);
+        assert_eq!(ordered, names(&["a", "b", "c"]));
+    }
+
+    #[test]
+    fn test_sort_text_encodes_the_ranking() {
+        let schema = serde_json::json!({
+            "type": "object",
+            "properties": { "count": {}, "enabled": {}, "name": {} }
+        });
+        let node = SchemaNode::new(&schema, &schema);
+        let ordered = order_by_absence(node.property_names(), &names(&["name", "count"]));
+        let items = property_completions_from_names(ordered, &node, true);
+
+        let mut by_sort_text = items.clone();
+        by_sort_text.sort_by(|a, b| a.sort_text.cmp(&b.sort_text));
+        let labels: Vec<&str> = by_sort_text.iter().map(|i| i.label.as_str()).collect();
+
+        assert_eq!(
+            labels,
+            vec!["enabled", "name", "count"],
+            "sortText must reproduce the ranking client-side"
+        );
+        assert!(
+            items.iter().all(|i| i.sort_text.is_some()),
+            "every property item needs a sortText"
+        );
     }
 }

@@ -575,6 +575,81 @@ async fn test_completion_property_names() {
 }
 
 #[tokio::test]
+async fn test_completion_ranks_missing_properties_first() {
+    let client = LspClient::spawn().await;
+    client.initialize().await;
+
+    let schema_url = schema_file_url();
+    // The object already has "count" then "name" (deliberately not alphabetical).
+    // Still missing from the schema: "enabled" and "meta".
+    // Line 0: {
+    // Line 1:   "$schema": "...",
+    // Line 2:   "count": 42,
+    // Line 3:   "name": "hello",
+    // Line 4:   ""
+    // Line 5: }
+    let text = format!(
+        "{{\n  \"$schema\": \"{schema_url}\",\n  \"count\": 42,\n  \"name\": \"hello\",\n  \"\"\n}}"
+    );
+    client
+        .send_notification(
+            "textDocument/didOpen",
+            Some(json!({
+                "textDocument": {
+                    "uri": "file:///tmp/completion-order.json",
+                    "languageId": "json",
+                    "version": 1,
+                    "text": text,
+                }
+            })),
+        )
+        .await;
+
+    client
+        .wait_for_notification("textDocument/publishDiagnostics")
+        .await;
+
+    // Cursor between the quotes of the empty key on line 4.
+    let resp = client
+        .send_request(
+            "textDocument/completion",
+            Some(json!({
+                "textDocument": { "uri": "file:///tmp/completion-order.json" },
+                "position": { "line": 4, "character": 3 }
+            })),
+        )
+        .await;
+
+    let items = resp["result"]
+        .as_array()
+        .expect("completion result should be an array");
+
+    // Sort the way a client does: by sortText.
+    let mut ranked: Vec<(&str, &str)> = items
+        .iter()
+        .map(|i| {
+            (
+                i["sortText"]
+                    .as_str()
+                    .expect("every property item must carry a sortText"),
+                i["label"].as_str().unwrap_or(""),
+            )
+        })
+        .collect();
+    ranked.sort();
+    let labels: Vec<&str> = ranked.into_iter().map(|(_, label)| label).collect();
+
+    // Missing properties first (alphabetical), then the present ones in document order.
+    assert_eq!(
+        labels,
+        vec!["enabled", "meta", "count", "name"],
+        "Missing properties must rank above present ones, which follow document order"
+    );
+
+    client.shutdown().await;
+}
+
+#[tokio::test]
 async fn test_no_schema_key_produces_no_diagnostics() {
     let client = LspClient::spawn().await;
     client.initialize().await;
