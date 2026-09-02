@@ -2,24 +2,21 @@
 
 ## Project Status
 
-**v0.1.0 — pre-release, ready to tag.**
-Rust LSP server binary only. No Lua plugin — users wire it up via Neovim's native `vim.lsp.config`.
-Core features working: diagnostics, hover, completion.
-See TODO markers in source for planned follow-on work.
+**DEPRECATED AND ARCHIVED — 2026-09-02. Do not add features; do not cut releases.**
 
-### Distribution To-Do (see `docs/plans/distribution-roadmap.md` for full detail)
+This repository is archived and read-only on GitHub. The last release is `v0.1.1`.
 
-| # | Task | Status |
-|---|------|--------|
-| 1 | `--version` / `-V` flag | ✅ done |
-| 2 | `CHANGELOG.md` | ✅ done |
-| 3 | GitHub Actions CI workflow (fmt + clippy + test, ubuntu + macos) | ✅ done |
-| 4 | GitHub Actions release workflow (5-target cross-compile + GitHub Release) | ✅ done |
-| 5 | Tag `v0.1.0` and push — triggers release workflow | ✅ done |
-| 6 | Create `blvp/homebrew-tap` repo + `Formula/json-ls.rb` | ✅ done |
-| 7 | Submit PR to `mason-org/mason-registry` | ⬜ |
-| 8 | (later) Submit to `homebrew/homebrew-core` | ⬜ |
-| 8 | (later) Submit to `homebrew/homebrew-core` | `brew install json-ls` without tap |
+Superseded by **`vscode-json-language-server`** from
+[`vscode-langservers-extracted`](https://github.com/hrsh7th/vscode-langservers-extracted)
+(upstream `microsoft/vscode-json-languageservice`; Mason `json-lsp`; nvim-lspconfig `jsonls`).
+It is faster and covers far more of the LSP surface than this server ever did — SchemaStore
+catalog matching, JSONC, formatting, folding ranges, document symbols, selection ranges.
+Competing with it was not a reasonable maintenance commitment.
+
+The Homebrew formula `blvp/tap/json-ls` carries a `deprecate!` marker and will be removed
+from `blvp/homebrew-tap` in a later cleanup.
+
+Everything below is retained as a historical record of how the server worked.
 
 ---
 

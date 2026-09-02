@@ -1,5 +1,35 @@
 # json-ls
 
+> [!WARNING]
+> **Deprecated and unmaintained as of 2026-09-02. This repository is archived and read-only.**
+>
+> Use **[`vscode-json-language-server`](https://github.com/hrsh7th/vscode-langservers-extracted)**
+> instead — the JSON server extracted from VS Code (upstream:
+> [`microsoft/vscode-json-languageservice`](https://github.com/microsoft/vscode-json-languageservice)).
+> It is dramatically faster and far more capable than this project: SchemaStore catalog
+> matching, JSONC, formatting, folding ranges, document symbols, selection ranges, and
+> schema association through client settings. Maintaining a competitor to it is not a
+> reasonable use of anyone's time.
+>
+> **Migrating (Neovim ≥ 0.11):**
+>
+> ```sh
+> npm i -g vscode-langservers-extracted    # or :MasonInstall json-lsp
+> ```
+>
+> ```lua
+> vim.lsp.enable("jsonls")   -- config ships with nvim-lspconfig
+> ```
+>
+> Then drop your `vim.lsp.config["json-ls"]` block and uninstall the binary:
+>
+> ```sh
+> brew uninstall json-ls && brew untap blvp/tap
+> ```
+>
+> The v0.1.1 release binaries stay downloadable, but will receive no further fixes.
+
+
 A JSON Language Server that detects `"$schema"` in JSON files, fetches the referenced JSON Schema,
 and provides diagnostics, hover, and completion via the LSP protocol.
 

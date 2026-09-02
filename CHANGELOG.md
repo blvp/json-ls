@@ -8,6 +8,15 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Deprecated
+
+- **Project deprecated and archived on 2026-09-02.** Use
+  [`vscode-json-language-server`](https://github.com/hrsh7th/vscode-langservers-extracted)
+  instead (npm `vscode-langservers-extracted`, Mason `json-lsp`, nvim-lspconfig `jsonls`).
+  It is faster and materially more featureful than this server.
+- Homebrew formula `blvp/tap/json-ls` is deprecated and will be removed from the tap.
+  No further releases will be published.
+
 ## [0.1.1] - 2026-02-26
 
 ### Fixed
